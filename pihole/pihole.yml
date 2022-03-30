@@ -1,0 +1,59 @@
+version: "3.3"
+
+services:
+
+        pihole:
+                image: "pihole/pihole:latest"
+                container_name: "pihole"
+                dns:
+                        - 127.0.0.1
+                        - 1.1.1.1
+                environment:
+                        PUID: '1000'
+                        PGID: '1000'
+                        TZ: "Europe/Berlin"
+                        VIRTUAL_HOST: pihole.penguin-slap.de
+                        DNSSEC: 'true'
+                restart: unless-stopped
+                volumes:
+                        - '/home/pi/.docker/pihole/etc-pihole:/etc/pihole'
+                        - '/home/pi/.docker/pihole/etc-dnsmasq.d:/etc/dnsmasq.d'
+                labels:
+                        - "traefik.enable=true"
+                        - "traefik.docker.network=traefik_net"
+
+                        # web interface
+                        - "traefik.http.routers.pihole.rule=Host(`pihole.penguin-slap.de`)"
+                        - "traefik.http.routers.pihole.entrypoints=websecure"
+                        - "traefik.http.routers.pihole.tls.certresolver=letsencrypt"
+                        - "traefik.http.services.pihole.loadbalancer.server.port=80"
+
+                        # DNS-over-TLS
+                        - "traefik.tcp.routers.dnsovertls.rule=HostSNI(`pihole.penguin-slap.de`)"
+                        - "traefik.tcp.routers.dnsovertls.entrypoints=dnsovertls"
+                        - "traefik.tcp.routers.dnsovertls.tls.certresolver=letsencrypt"
+                        - "traefik.tcp.routers.dnsovertls.service=pihole"
+
+                        # Normal DNS coming in on 53 TCP, no TLS
+                        - "traefik.tcp.routers.dns.rule=HostSNI(`pihole.penguin-slap.de`)"
+                        - "traefik.tcp.routers.dns.entrypoints=dns"
+                        - "traefik.tcp.routers.dns.service=pihole"
+
+                        # recieves traffic from both the TLS and non-TLS traefik routers
+                        - "traefik.tcp.services.pihole.loadbalancer.server.port=53"
+
+                        # Normal DNS coming in on 53 UDP
+                        - "traefik.udp.routers.udpdns.entrypoints=udpdns"
+                        - "traefik.udp.routers.udpdns.service=pihole"
+                        - "traefik.udp.services.pihole.loadbalancer.server.port=53"
+
+                networks:
+                        traefik_net: {}
+                        traefik_macvlan:
+                                ipv4_address: 192.168.178.241
+
+networks:
+        traefik_macvlan:
+                external:       true
+        traefik_net:
+                external:       true

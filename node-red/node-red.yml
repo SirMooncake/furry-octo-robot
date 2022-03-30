@@ -1,0 +1,38 @@
+version: "3.3"
+
+
+services:
+
+        node-red:
+                image: "nodered/node-red"
+                container_name: "node-red"
+                ports:
+                        - "1880:1880"
+                volumes:
+                        - "/home/pi/.docker/node-red/data:/data"
+                depends_on:
+                        - "home-assistant"
+                environment:
+                        TZ: "Europe/Berlin"
+                        PUID: '1000'
+                        PGID: '1000'
+                networks:
+                        traefik_net: {}
+                        traefik_macvlan:
+                                ipv4_address: 192.168.178.242
+                user: '${PUID}:${PGID}'
+                labels:
+                        - "traefik.enable=true"
+                        - "traefik.docker.network=traefik_net"
+                        - "traefik.http.routers.node-red.rule=Host(`node-red.penguin-slap.de`)"
+                        - "traefik.http.routers.node-red.entrypoints=websecure"
+                        - "traefik.http.routers.node-red.tls.certresolver=letsencrypt"
+                        - "traefik.http.services.node-red.loadbalancer.server.port=1880"
+
+networks:
+        traefik_net:
+                external:       
+                                true
+        traefik_macvlan:
+                external:       
+                                true

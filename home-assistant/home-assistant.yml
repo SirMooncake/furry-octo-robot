@@ -1,0 +1,32 @@
+version: "3.3"
+
+services:
+        home-assistant:
+                container_name: "home-assistant"
+                image: "homeassistant/home-assistant"
+                volumes:
+                        - "/home/pi/.docker/home-assistant/config:/config"
+                        - "/etc/localtime:/etc/localtime:ro"
+                restart: unless-stopped
+                privileged: true
+                security_opt:
+                        - "no-new-privileges:true"
+                networks:
+                        traefik_net: {}
+                        traefik_macvlan:
+                                ipv4_address:   192.168.178.243
+                labels:
+                        - "traefik.enable=true"
+                        - "traefik.docker.network=traefik_net"
+                        - "traefik.http.routers.home-assistant.rule=Host(`home-assistant.penguin-slap.de`)"
+                        - "traefik.http.routers.home-assistant.entrypoints=websecure"
+                        - "traefik.http.routers.home-assistant.tls.certResolver=letsencrypt"
+                        - "traefik.http.services.home-assistant.loadbalancer.server.port=8123"  
+
+networks:
+        traefik_net:
+                external:       
+                                true
+        traefik_macvlan:
+                external:
+                                true

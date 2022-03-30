@@ -1,0 +1,63 @@
+version: "3.3"
+
+secrets:
+        netcup_customer_number:
+                file: $SECRETSDIR/netcup_customer_number
+        netcup_api_key:
+                file: $SECRETSDIR/netcup_api_key
+        netcup_api_password:
+                file: $SECRETSDIR/netcup_api_password
+services:
+        traefik:
+                image: "traefik:latest"
+                container_name: "traefik"
+                command:
+                        - "--log.level=DEBUG"
+                        #- "--api.insecure=true"
+                        - "--api.dashboard=true"
+                        - "--providers.docker=true"
+                        - "--providers.docker.exposedbydefault=false"
+                        - "--entrypoints.web.address=:80"
+                        - "--entrypoints.websecure.address=:443"
+                        - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+                        - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+                        - "--entrypoints.dnsovertls.address=:853"
+                        - "--entrypoints.dns.address=:53"
+                        - "--entrypoints.udpdns.address=:53/udp"
+                        - "--certificatesResolvers.letsencrypt.acme.email=robert.jonik@protonmail.com"
+                        - "--certificatesResolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+                        - "--certificatesResolvers.letsencrypt.acme.dnsChallenge=true"
+                        - "--certificatesResolvers.letsencrypt.acme.dnsChallenge.provider=netcup"
+                        - "--certificatesResolvers.letsencrypt.acme.dnsChallenge.delayBeforeCheck=0"
+                ports:
+                        - "80:80"
+                        - "443:443"
+                volumes:
+                        - "/var/run/docker.sock:/var/run/docker.sock:ro"
+                        - "/home/pi/.docker/traefik/letsencrypt:/letsencrypt"
+                secrets:
+                        - "netcup_customer_number"
+                        - "netcup_api_key"
+                        - "netcup_api_password"
+                environment:
+                        - "NETCUP_CUSTOMER_NUMBER=netcup_customer_number"
+                        - "NETCUP_API_KEY=netcup_api_key"
+                        - "NETCUP_API_PASSWORD=netcup_api_password"
+                labels:
+                        - "traefik.enable=true"
+                        - "traefik.http.routers.traefik.rule=Host(`traefik.penguin-slap.de`)"
+                        - "traefik.http.routers.traefik.service=api@internal"
+                        - "traefik.http.routers.traefik.entrypoints=websecure"
+                        - "traefik.http.routers.traefik.tls.certResolver=letsencrypt"
+                        #wildcard certs
+                        - "traefik.http.routers.traefik.tls.domains[0].main=penguin-slap.de"
+                        - "traefik.http.routers.traefik.tls.domains[0].sans=*.penguin-slap.de"
+                networks:
+                        - traefik_net
+                extra_hosts:
+                        - host.docker.internal:172.17.0.1
+
+networks:
+        traefik_net:
+                external:
+                        true

@@ -1,0 +1,117 @@
+version: "3.3"
+
+secrets:
+        grafana_admin_password:
+                file: $SECRETSDIR/grafana_admin_password
+services:
+  cadvisor:
+    container_name: monitoring-cadvisor
+    build:
+            context: ../monitoring
+    devices:
+      - /dev/kmsg
+    expose:
+      - 8080
+    hostname: rpi-cadvisor
+    ipc: shareable
+    networks:
+      - traefik_monitor
+    privileged: true
+    restart: unless-stopped
+    security_opt:
+      - label=disable
+      - "no-new-privileges:true"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      
+  grafana:
+    container_name: monitoring-grafana
+    environment:
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_PATHS_CONFIG=/etc/grafana/grafana.ini
+      - GF_PATHS_DATA=/var/lib/grafana
+      - GF_PATHS_HOME=/usr/share/grafana
+      - GF_PATHS_LOGS=/var/log/grafana
+      - GF_PATHS_PLUGINS=/var/lib/grafana/plugins
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=grafana_admin_password
+      - PGID=1000
+      - PUID=1000
+    secrets:
+            - "grafana_admin_password"
+    hostname: rpi-grafana
+    image: grafana/grafana:latest
+    networks:
+        - traefik_net   
+        - traefik_monitor
+    user: '${PUID}:${PGID}'
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+    volumes:
+      # to be modified depending on your needs
+      - "/home/pi/.docker/monitoring/grafana/data:/var/lib/grafana"
+      - "/home/pi/.docker/monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini"
+      - "/home/pi/.docker/monitoring/grafana/provisioning:/etc/grafana/provisioning"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_net"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.penguin-slap.de`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certResolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+  
+  node-exporter:
+    container_name: monitoring-node-exporter
+    expose:
+      - 9100
+    hostname: rpi-exporter
+    image: prom/node-exporter:latest
+    networks:
+      - traefik_monitor
+    restart: unless-stopped
+
+  prometheus:
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    container_name: monitoring-prometheus
+    expose:
+      - 9090
+    hostname: rpi-prom
+    image: prom/prometheus:latest
+    environment:
+        - PGID=1000
+        - PUID=1000
+    networks:
+      - traefik_net
+      - traefik_monitor
+    restart: unless-stopped
+    volumes:
+      # to be modified depending on your needs
+      - "/home/pi/.docker/monitoring/prometheus/data:/prometheus"
+      - "/home/pi/.docker/monitoring/prometheus/config:/etc/prometheus/"
+    links:
+      - cadvisor:cadvisor
+      - node-exporter:node-exporter
+    user: '${PUID}:${PGID}'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_net"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.penguin-slap.de`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls.certResolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+networks:
+        traefik_net:
+                external: 
+                        true
+        traefik_monitor:
+                external:
+                        true
